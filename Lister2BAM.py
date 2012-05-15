@@ -25,6 +25,9 @@ import string
 
 ### TODOs ###
 ############################################################################################################################################################################################
+# Fix all functions so stranded-ness is properly handled
+# Add XG tag to reads
+# All reads informative for the OB strand have the incorrect orientation when viewed in IGV. 
 # Skip header line
 # Check insert size calculations
 # Add command line call to @PG tag
@@ -50,51 +53,58 @@ import string
 
 
 ### Function definitions ###
-# All functions return a 2-tuple - the first element for read1 and the second element for read2. If single-end data then only the first element should be used and the second element is set to None
+# All functions return a 2-tuple - the first element for readL (the leftmost read, regardless of strand) and the second element for readR (the rightmost read, regardless of strand)
+# If single-end data then only the first element should be used and the second element is set to None
 #############################################################################################################################################################################################
 def makeRNAME(assembly, sequenceB):
     rname = ''.join(['chr', assembly])
     if sequenceB != '':
-        return rname, rname
+        rnameL = rname
+        rnameR = rname
+        return rnameL, rnameR
     else:
         return rname, None
 
-def makeQNAME(RNAME1, ID, sequenceB):
-    qname = '_'.join([RNAME1, ID])
+def makeQNAME(RNAMEL, ID, sequenceB):
+    qname = '_'.join([RNAMEL, ID])
     if sequenceB != '':
-        return qname, qname
+        qnameL = qname
+        qnameR = qname
+        return qnameL, qnameR
     else:
         return qname, None
     
 def makePOS(start, end, sequenceA, sequenceB):
     if sequenceB != '': # Read is paired-end
-        start1 = int(start) # 0-based leftmost mapping position
-        start2 = int(end) - len(sequenceB) # 0-based leftmost mapping position
-        return start1, start2
+        startL = int(start) # 0-based leftmost mapping position
+        startR = int(end) - len(sequenceB) # 0-based leftmost mapping position
+        return startL, startR
     else:
         start = int(start) # 0-based leftmost mapping position
         return start, None
         
 def makeFLAG(sequenceA, sequenceB, strand):
     if sequenceB != '': # Read is paired-end in-sequencing
-        flag1 = 0x0 # Flag value for read1 in a paired-end read
-        flag2 = 0x0 # Flag value for read2 in a paired-end read
+        flagL = 0x0 # Flag value for read1 in a paired-end read
+        flagR = 0x0 # Flag value for read2 in a paired-end read
         if sequenceB != '': # Read is paired-end in-sequencing
-            flag1 += 0x01
-            flag2 += 0x01
-            flag1 += 0x02 # Flag is properly-paired according to the aligner (forcing to be true)
-            flag2 += 0x02 # Flag is properly-paired according to the aligner (forcing to be true)
-        if strand == '+':
-            flag1 += 0x20
-            flag2 += 0x10
-        elif strand == '-':
-            flag1 += 0x10
-            flag2 += 0x20
+            flagL += 0x01 # Paired-end read
+            flagR += 0x01 # Paired-end read
+            flagL += 0x02 # Flag is properly-paired according to the aligner (forcing to be true)
+            flagR += 0x02 # Flag is properly-paired according to the aligner (forcing to be true)
+            if strand == '+':
+                flagL += 0x20 # Seq of readR is reverse-complemented
+                flagR += 0x10 # Seq of readR is reverse-complemented
+                flagL += 0x40 # Leftmost read is read1
+                flagR += 0x80 # Rightmost read is read2
+            elif strand == '-':
+                flagL += 0x20 # Seq of read1 is reverse-complemented
+                flagR += 0x10 # Seq of read1 is reverse-complemented
+                flagR += 0x40 # Rightmost read is read1
+                flagL += 0x80 # Leftmost read is read2
         else:
-            print 'No strand set for read', RNAME1            
-        flag1 += 0x40 # Assuming sequenceA refers to read1 in the read-pair
-        flag2 += 0x80 # Assuming sequenceB refers to read2 in the read-pair
-        return flag1, flag2
+            print 'No strand set for read', RNAME1
+        return flagL, flagR
     else: # Read is single-end
         flag = 0x0
         if strand == '-':
@@ -109,51 +119,66 @@ def makeMAPQ(sequenceB):
 
 def makeCIGAR(sequenceA, sequenceB):
     if sequenceB != '':
-        cigar1 = [(0, len(sequenceA))]
-        cigar2 = [(0, len(sequenceB))]
-        return cigar1, cigar2
+        cigarL = [(0, len(sequenceA))]
+        cigarR = [(0, len(sequenceB))]
+        return cigarL, cigarR
     else:
         cigar = [(0, len(sequenceA))]
         return cigar, None
 
-def makeRNEXT(RNAME1, RNAME2):
-    if RNAME2 is not None:
-        return RNAME2, RNAME1
+def makeRNEXT(RNAMEL, RNAMER):
+    if RNAMER is not None:
+        return RNAMER, RNAMEL
     else:
         return '*', None
 
-def makePNEXT(start1, start2):
-    if start2 is not None:
-        return start2, start1
+def makePNEXT(startL, startR):
+    if startR is not None:
+        return startR, startL
     else:
         return 0, None
 
 def makeTLEN(start, end, sequenceB):
     if sequenceB != '': # Paired-end read
-        abs_tlen = int(end) - int(start) # absolute value of TLEN 
-        return abs_tlen, -abs_tlen
+        abs_tlen = int(end) - int(start) # absolute value of TLEN
+        return abs_tlen, -abs_tlen        
     else:
         return 0, None
 
 def makeSEQ(sequenceA, sequenceB, strand):
     if strand == '+':
-        seq1 = sequenceA
-        seq2 = sequenceB 
+        seqL = sequenceA
+        seqR = sequenceB 
     elif strand == '-':
-        seq1 = sequenceA
-        seq2 = sequenceB
+        seqL = DNAComplement(sequenceA)
+        seqR = DNAComplement(sequenceB)
     if sequenceB != '':
-        return seq1, seq2
+        return seqL, seqR
     else:
-        return seq1, None
+        return seqL, None
+
+def DNAComplement(strand):
+    return strand.translate(string.maketrans('TAGCtagc', 'ATCGATCG'))
         
 def makeQUAL(sequenceA, sequenceB):
-    qual1 = 'E' * len(sequenceA)
-    qual2 = 'E' * len(sequenceB)
+    qualL = 'E' * len(sequenceA)
+    qualR = 'E' * len(sequenceB)
     if sequenceB != '':
-        return qual1, qual2
+        return qualL, qualR
     else:
-        return qual1, None
+        return qualL, None
+    
+def makeXG(sequenceB, strand):
+    if strand == '+':
+        XG = 'CT'
+    elif strand == '-':
+        XG = 'GA'
+    if sequenceB != '':
+        XGL = ('XG', XG)
+        XGR = ('XG', XG)
+        return XGL, XGR
+    else:
+        return ('XG', XG)
 
 def createHeader():
     FAIDX = open('/export/share/disk501/lab0605/Bioinformatics/databases/bahlolab_db/WGBS/genomes/hg18+lambda_phage/hg18+lambda.fa.fai', 'r')
@@ -199,44 +224,47 @@ for FILENAME in FILENAMES:
         sequenceB = line[5]
         ID = line[6]
         # Make the SAM/BAM fields
-        RNAME1, RNAME2 = makeRNAME(assembly, sequenceB)
-        QNAME1, QNAME2 = makeQNAME(RNAME1, ID, sequenceB)
-        FLAG1, FLAG2 = makeFLAG(sequenceA, sequenceB, strand)
-        POS1, POS2 = makePOS(start, end, sequenceA, sequenceB)
-        MAPQ1, MAPQ2 = makeMAPQ(sequenceB)
-        CIGAR1, CIGAR2 = makeCIGAR(sequenceA, sequenceB)
-        RNEXT1, RNEXT2 = makeRNEXT(RNAME1, RNAME2) 
-        PNEXT1, PNEXT2 = makePNEXT(POS1, POS2)
-        TLEN1, TLEN2 = makeTLEN(start, end, sequenceB)
-        SEQ1, SEQ2 = makeSEQ(sequenceA, sequenceB, strand)
-        QUAL1, QUAL2 = makeQUAL(sequenceA, sequenceB)
-        if sequenceB != '': # Paired-end read
-            read1 = pysam.AlignedRead()
-            read2 = pysam.AlignedRead()
-            read1.rname = BAM.gettid(RNAME1)
-            read2.rname = BAM.gettid(RNAME2)
-            read1.qname = QNAME1
-            read2.qname = QNAME2
-            read1.flag = FLAG1
-            read2.flag = FLAG2
-            read1.pos = POS1
-            read2.pos = POS2
-            read1.mapq = MAPQ1
-            read2.mapq = MAPQ2
-            read1.cigar = CIGAR1
-            read2.cigar = CIGAR2
-            read1.rnext = BAM.gettid(RNEXT1)
-            read2.rnext = BAM.gettid(RNEXT2)
-            read1.pnext = PNEXT1
-            read2.pnext = PNEXT2
-            read1.tlen = TLEN1
-            read2.tlen = TLEN2
-            read1.seq = SEQ1
-            read2.seq = SEQ2
-            read1.qual = QUAL1
-            read2.qual = QUAL2
-            BAM.write(read1)
-            BAM.write(read2)
+        RNAMEL, RNAMER = makeRNAME(assembly, sequenceB)
+        QNAMEL, QNAMER = makeQNAME(RNAMEL, ID, sequenceB)
+        FLAGL, FLAGR = makeFLAG(sequenceA, sequenceB, strand)
+        POSL, POSR = makePOS(start, end, sequenceA, sequenceB)
+        MAPQL, MAPQR = makeMAPQ(sequenceB)
+        CIGARL, CIGARR = makeCIGAR(sequenceA, sequenceB)
+        RNEXTL, RNEXTR = makeRNEXT(RNAMEL, RNAMER) 
+        PNEXTL, PNEXTR = makePNEXT(POSL, POSR)
+        TLENL, TLENR = makeTLEN(start, end, sequenceB)
+        SEQL, SEQR = makeSEQ(sequenceA, sequenceB, strand)
+        QUALL, QUALR = makeQUAL(sequenceA, sequenceB)
+        XGL, XGR = makeXG(sequenceB, strand)
+        if sequenceB != '': # Paired-end read - using readL/readR notation, thus for the Lister protocol a OT-strand readL = read1 and readR = read2 whereas OB-strand readL = read2 and readR = read1
+            readL = pysam.AlignedRead()
+            readR = pysam.AlignedRead()
+            readL.rname = BAM.gettid(RNAMEL)
+            readR.rname = BAM.gettid(RNAMER)
+            readL.qname = QNAMEL
+            readR.qname = QNAMER
+            readL.flag = FLAGL
+            readR.flag = FLAGR
+            readL.pos = POSL
+            readR.pos = POSR
+            readL.mapq = MAPQL
+            readR.mapq = MAPQR
+            readL.cigar = CIGARL
+            readR.cigar = CIGARR
+            readL.rnext = BAM.gettid(RNEXTL)
+            readR.rnext = BAM.gettid(RNEXTR)
+            readL.pnext = PNEXTL
+            readR.pnext = PNEXTR
+            readL.tlen = TLENL
+            readR.tlen = TLENR
+            readL.seq = SEQL
+            readR.seq = SEQR
+            readL.qual = QUALL
+            readR.qual = QUALR
+            readL.tags = readL.tags + [XGL]
+            readR.tags = readR.tags + [XGL]
+            BAM.write(readL)
+            BAM.write(readR)
         elif sequenceB == '': # Single-end 
             read = pysam.AlignedRead()
             read.rname = BAM.gettid(RNAME1)
@@ -250,6 +278,7 @@ for FILENAME in FILENAMES:
             read.tlen = TLEN1
             read.seq = SEQ1
             read.qual = QUAL1
+            read.tags = read.tags + [XGL]
             OUT.write(read)
         linecounter += 1
     f.close()
