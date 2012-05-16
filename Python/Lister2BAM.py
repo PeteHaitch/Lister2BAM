@@ -1,7 +1,6 @@
 #!/usr/bin/python
 import pysam
 import string
-from os import listdir
 import argparse
 
 ## This program is Copyright (C) 2012, Peter Hickey (hickey@wehi.edu.au)
@@ -27,7 +26,7 @@ import argparse
 
 ### TODOs ###
 ############################################################################################################################################################################################
-# Might add MD and NM tags with samtools calmd
+# TODO: Might add MD and NM tags with samtools calmd
 ############################################################################################################################################################################################
 
 ### INPUT FILE FORMAT ###
@@ -45,10 +44,10 @@ import argparse
 ### Command line passer ###
 ############################################################################################################################################################################################
 parser = argparse.ArgumentParser(description='Convert Lister-style alignment files of MethylC-Seq data to BAM format.')
-parser.add_argument('methylCseq_read_dir', metavar = 'in_dir',
-                  help='The directory containing the methylCseq_reads files')
+parser.add_argument('infile', metavar = 'infile',
+                   help='The filename of the Lister-style file that is to be converted to BAM format')
 parser.add_argument('outfile', metavar = 'out.bam',
-                  help='The path to the new SAM/BAM file')
+                  help='The path to the new SAM/BAM file.')
 parser.add_argument('ref_index', metavar = 'reference.fa.fai',
                   help='The path to the index (.fai file) of reference genome FASTA file.')
 args = parser.parse_args()
@@ -190,19 +189,16 @@ def createHeader():
         sq.append({'LN': int(line[1]), 'SN': line[0]})
     pgid = 'Lister2BAM.py'
     vn = '1.0'
-    cl = ' '.join(['Lister2BAM.py', args.methylCseq_read_dir, args.outfile, args.ref_index])
+    cl = ' '.join(['Lister2BAM.py', args.infile, args.outfile, args.ref_index])
     pg = [{'ID': pgid, 'VN': vn, 'CL': cl}]
     header = {'HD': hd, 'SQ': sq, 'PG': pg}
     FAIDX.close()
     return header
-
-
 #############################################################################################################################################################################################
 
 ### Open files ###
 ############################################################################################################################################################################################
-# SAM/BAM file to be processed
-FILENAMES = listdir(args.methylCseq_read_dir)
+INFILE = open(args.infile, 'r')
 header = createHeader()
 BAM = pysam.Samfile(args.outfile, 'wb', header = header)
 ############################################################################################################################################################################################
@@ -210,82 +206,83 @@ BAM = pysam.Samfile(args.outfile, 'wb', header = header)
 ### The main loop ###
 ############################################################################################################################################################################################
 # Loop over methylC_seq_reads files file-by-file (i.e. chromosome-by-chromosome)
-for FILENAME in FILENAMES:
-    path = '/'.join([args.methylCseq_read_dir, FILENAME])
-    f = open(path, 'r')
-    linecounter = 1
-    for line in f: # Loop over the file line-by-line and convert to an AlignedRead instance
-        if linecounter == 1: # Skip the header line
-            linecounter +=1
-            continue
-        line = line.rsplit()
-        # Fields of the Lister-style file
-        assembly = line[0]
-        strand = line[1]
-        start = line[2]
-        end = line[3]
-        sequenceA = line[4]
-        sequenceB = line[5]
-        ID = line[6]
-        # Make the SAM/BAM fields
-        RNAMEL, RNAMER = makeRNAME(assembly, sequenceB)
-        QNAMEL, QNAMER = makeQNAME(RNAMEL, ID, sequenceB)
-        FLAGL, FLAGR = makeFLAG(sequenceA, sequenceB, strand)
-        POSL, POSR = makePOS(start, end, sequenceA, sequenceB)
-        MAPQL, MAPQR = makeMAPQ(sequenceB)
-        CIGARL, CIGARR = makeCIGAR(sequenceA, sequenceB)
-        RNEXTL, RNEXTR = makeRNEXT(RNAMEL, RNAMER) 
-        PNEXTL, PNEXTR = makePNEXT(POSL, POSR)
-        TLENL, TLENR = makeTLEN(start, end, sequenceB)
-        SEQL, SEQR = makeSEQ(sequenceA, sequenceB, strand)
-        QUALL, QUALR = makeQUAL(sequenceA, sequenceB)
-        XGL, XGR = makeXG(sequenceB, strand)
-        if sequenceB != '': # Paired-end read - using readL/readR notation, thus for the Lister protocol a OT-strand readL = read1 and readR = read2 whereas OB-strand readL = read2 and readR = read1
-            readL = pysam.AlignedRead()
-            readR = pysam.AlignedRead()
-            readL.rname = BAM.gettid(RNAMEL)
-            readR.rname = BAM.gettid(RNAMER)
-            readL.qname = QNAMEL
-            readR.qname = QNAMER
-            readL.flag = FLAGL
-            readR.flag = FLAGR
-            readL.pos = POSL
-            readR.pos = POSR
-            readL.mapq = MAPQL
-            readR.mapq = MAPQR
-            readL.cigar = CIGARL
-            readR.cigar = CIGARR
-            readL.rnext = BAM.gettid(RNEXTL)
-            readR.rnext = BAM.gettid(RNEXTR)
-            readL.pnext = PNEXTL
-            readR.pnext = PNEXTR
-            readL.tlen = TLENL
-            readR.tlen = TLENR
-            readL.seq = SEQL
-            readR.seq = SEQR
-            readL.qual = QUALL
-            readR.qual = QUALR
-            readL.tags = readL.tags + [XGL]
-            readR.tags = readR.tags + [XGL]
-            BAM.write(readL)
-            BAM.write(readR)
-        elif sequenceB == '': # Single-end 
-            read = pysam.AlignedRead()
-            read.rname = BAM.gettid(RNAME1)
-            read.qname = QNAME1
-            read.flag = FLAG1
-            read.pos = POS1
-            read.mapq = MAPQ1
-            read.cigar = CIGAR1
-            read.rnext = BAM.gettid(RNEXT1)
-            read.pnext = PNEXT1
-            read.tlen = TLEN1
-            read.seq = SEQ1
-            read.qual = QUAL1
-            read.tags = read.tags + [XGL]
-            BAM.write(read)
-        linecounter += 1
-    f.close()
+print 'Input files is', args.infile
+linecounter = 1
+for line in INFILE: # Loop over the file line-by-line and convert to an AlignedRead instance
+    if linecounter == 1: # Skip the header line
+        linecounter +=1
+        continue
+    line = line.rsplit()
+    # Fields of the Lister-style file
+    assembly = line[0]
+    strand = line[1]
+    start = line[2]
+    end = line[3]
+    sequenceA = line[4]
+    sequenceB = line[5]
+    ID = line[6]
+    # Make the SAM/BAM fields
+    RNAMEL, RNAMER = makeRNAME(assembly, sequenceB)
+    QNAMEL, QNAMER = makeQNAME(RNAMEL, ID, sequenceB)
+    FLAGL, FLAGR = makeFLAG(sequenceA, sequenceB, strand)
+    POSL, POSR = makePOS(start, end, sequenceA, sequenceB)
+    MAPQL, MAPQR = makeMAPQ(sequenceB)
+    CIGARL, CIGARR = makeCIGAR(sequenceA, sequenceB)
+    RNEXTL, RNEXTR = makeRNEXT(RNAMEL, RNAMER) 
+    PNEXTL, PNEXTR = makePNEXT(POSL, POSR)
+    TLENL, TLENR = makeTLEN(start, end, sequenceB)
+    SEQL, SEQR = makeSEQ(sequenceA, sequenceB, strand)
+    QUALL, QUALR = makeQUAL(sequenceA, sequenceB)
+    XGL, XGR = makeXG(sequenceB, strand)
+    if sequenceB != '': # Paired-end: using readL/readR notation, thus for the Lister protocol a OT-strand readL=read1 and readR=read2 whereas for OB-strand readL=read2 and readR=read1
+        readL = pysam.AlignedRead()
+        readR = pysam.AlignedRead()
+        readL.rname = BAM.gettid(RNAMEL)
+        readR.rname = BAM.gettid(RNAMER)
+        readL.qname = QNAMEL
+        readR.qname = QNAMER
+        readL.flag = FLAGL
+        readR.flag = FLAGR
+        readL.pos = POSL
+        readR.pos = POSR
+        readL.mapq = MAPQL
+        readR.mapq = MAPQR
+        readL.cigar = CIGARL
+        readR.cigar = CIGARR
+        readL.rnext = BAM.gettid(RNEXTL)
+        readR.rnext = BAM.gettid(RNEXTR)
+        readL.pnext = PNEXTL
+        readR.pnext = PNEXTR
+        readL.tlen = TLENL
+        readR.tlen = TLENR
+        readL.seq = SEQL
+        readR.seq = SEQR
+        readL.qual = QUALL
+        readR.qual = QUALR
+        readL.tags = readL.tags + [XGL]
+        readR.tags = readR.tags + [XGL]
+        BAM.write(readL)
+        BAM.write(readR)
+    elif sequenceB == '': # Single-end 
+        read = pysam.AlignedRead()
+        read.rname = BAM.gettid(RNAME1)
+        read.qname = QNAME1
+        read.flag = FLAG1
+        read.pos = POS1
+        read.mapq = MAPQ1
+        read.cigar = CIGAR1
+        read.rnext = BAM.gettid(RNEXT1)
+        read.pnext = PNEXT1
+        read.tlen = TLEN1
+        read.seq = SEQ1
+        read.qual = QUAL1
+        read.tags = read.tags + [XGL]
+        BAM.write(read)
+    linecounter += 1
+############################################################################################################################################################################################
 
+### Close files
+############################################################################################################################################################################################
+INFILE.close()
 BAM.close()
 ############################################################################################################################################################################################
