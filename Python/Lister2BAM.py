@@ -1,6 +1,8 @@
 #!/usr/bin/python
 import pysam
 import string
+from os import listdir
+import argparse
 
 ## This program is Copyright (C) 2012, Peter Hickey (hickey@wehi.edu.au)
 
@@ -25,19 +27,7 @@ import string
 
 ### TODOs ###
 ############################################################################################################################################################################################
-# Fix all functions so stranded-ness is properly handled
-# Add XG tag to reads
-# All reads informative for the OB strand have the incorrect orientation when viewed in IGV. 
-# Skip header line
-# Check insert size calculations
-# Add command line call to @PG tag
-# Add line counter
-# Don't need the DNA class
-# Add arg.parse(), including 'filenames', 'pairedEnd', 'header', 'faidx'
-# Make SAM header
-# Print error message in make<FIELD>() functions
 # Might add MD and NM tags with samtools calmd
-# Extend to paire-end data - need to keep track of paired-reads. Keep 'unseen' read-pairs in a dictionary, once seen extract that element (kill its entry) and convert the read-pair. Perhaps read the entire file into a dictionary where keys are read-names, then process the dictionary to create the SAM/BAM. 
 ############################################################################################################################################################################################
 
 ### INPUT FILE FORMAT ###
@@ -49,8 +39,20 @@ import string
 ## sequenceA = sequence of read1 in left-to-right-Watson-strand orientation. Sequence complemented if strand = "-"
 ## sequenceB = sequence of read2 (paired-end) or blank (single-end) in left-to-right-Watson-strand orientation. Sequence complemented if strand = "-"
 ## id = read-ID
-# start < end by definition
+# NB: start < end by definition
+############################################################################################################################################################################################
 
+### Command line passer ###
+############################################################################################################################################################################################
+parser = argparse.ArgumentParser(description='Convert Lister-style alignment files of MethylC-Seq data to BAM format.')
+parser.add_argument('methylCseq_read_dir', metavar = 'in_dir',
+                  help='The directory containing the methylCseq_reads files')
+parser.add_argument('outfile', metavar = 'out.bam',
+                  help='The path to the new SAM/BAM file')
+parser.add_argument('ref_index', metavar = 'reference.fa.fai',
+                  help='The path to the index (.fai file) of reference genome FASTA file.')
+args = parser.parse_args()
+############################################################################################################################################################################################
 
 ### Function definitions ###
 # All functions return a 2-tuple - the first element for readL (the leftmost read, regardless of strand) and the second element for readR (the rightmost read, regardless of strand)
@@ -102,8 +104,6 @@ def makeFLAG(sequenceA, sequenceB, strand):
                 flagR += 0x10 # Seq of read1 is reverse-complemented
                 flagR += 0x40 # Rightmost read is read1
                 flagL += 0x80 # Leftmost read is read2
-        else:
-            print 'No strand set for read', RNAME1
         return flagL, flagR
     else: # Read is single-end
         flag = 0x0
@@ -181,7 +181,7 @@ def makeXG(sequenceB, strand):
         return ('XG', XG)
 
 def createHeader():
-    FAIDX = open('/export/share/disk501/lab0605/Bioinformatics/databases/bahlolab_db/WGBS/genomes/hg18+lambda_phage/hg18+lambda.fa.fai', 'r')
+    FAIDX = open(args.ref_index, 'r')
     faidx = FAIDX.read().rstrip().rsplit('\n')
     hd = {'VN': '1.0', 'SO': 'unsorted'}
     sq = []
@@ -190,7 +190,7 @@ def createHeader():
         sq.append({'LN': int(line[1]), 'SN': line[0]})
     pgid = 'Lister2BAM.py'
     vn = '1.0'
-    cl = 'command line'
+    cl = ' '.join(['Lister2BAM.py', args.methylCseq_read_dir, args.outfile, args.ref_index])
     pg = [{'ID': pgid, 'VN': vn, 'CL': cl}]
     header = {'HD': hd, 'SQ': sq, 'PG': pg}
     FAIDX.close()
@@ -198,19 +198,23 @@ def createHeader():
 
 
 #############################################################################################################################################################################################
-# Make SAM header
+
+### Open files ###
+############################################################################################################################################################################################
+# SAM/BAM file to be processed
+FILENAMES = listdir(args.methylCseq_read_dir)
 header = createHeader()
+BAM = pysam.Samfile(args.outfile, 'wb', header = header)
+############################################################################################################################################################################################
 
-# Make BAM file
-BAM = pysam.Samfile('test.bam', 'wh', header = header) # This writes SAM rather than BAM
-
-# Loop over files chromosome-by-chromosome
-FILENAMES = ['../Lister_2011_BS-seq_data/ADS/methylCseq_reads_ads/methylCseq_reads_ads_10']
-
+### The main loop ###
+############################################################################################################################################################################################
+# Loop over methylC_seq_reads files file-by-file (i.e. chromosome-by-chromosome)
 for FILENAME in FILENAMES:
-    f = open(FILENAME, 'r')
+    path = '/'.join([args.methylCseq_read_dir, FILENAME])
+    f = open(path, 'r')
     linecounter = 1
-    for line in f: # Loop over the gzip file line-by-line and convert to corresponding SAM/BAM entry
+    for line in f: # Loop over the file line-by-line and convert to an AlignedRead instance
         if linecounter == 1: # Skip the header line
             linecounter +=1
             continue
@@ -279,8 +283,9 @@ for FILENAME in FILENAMES:
             read.seq = SEQ1
             read.qual = QUAL1
             read.tags = read.tags + [XGL]
-            OUT.write(read)
+            BAM.write(read)
         linecounter += 1
     f.close()
 
 BAM.close()
+############################################################################################################################################################################################
