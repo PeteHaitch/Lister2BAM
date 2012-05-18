@@ -212,7 +212,7 @@ for line in INFILE: # Loop over the file line-by-line and convert to an AlignedR
     if linecounter == 1: # Skip the header line
         linecounter +=1
         continue
-    line = line.rsplit()
+    line = line.rstrip('\n').rsplit('\t')
     # Fields of the Lister-style file
     assembly = line[0]
     strand = line[1]
