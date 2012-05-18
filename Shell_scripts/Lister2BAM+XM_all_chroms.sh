@@ -19,6 +19,7 @@ XM_TAG='python /home/users/lab0605/hickey/Lister2BAM/XM_tag.py'
 BAM_DIR=../BAM
 chroms=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y M L)
 
+# Convert to BAM
 for i in ${chroms[@]}
 do
 FILE=${LISTER_PREFIX}${i}
@@ -27,6 +28,7 @@ done
 
 wait
 
+# Add XM tag to each read
 for i in ${chroms[@]}
 do
 FILE=${LISTER_PREFIX}${i}
@@ -34,3 +36,15 @@ ${XM_TAG} ${BAM_DIR}/${SAMPLE_ID}_${i}.bam ${BAM_DIR}/XM_${SAMPLE_ID}_${i}.bam $
 done
 
 wait
+
+# Remove non-XM BAMs
+for i in ${chroms[@]}
+do
+rm ${BAM_DIR}/${SAMPLE_ID}_${i}.bam
+done
+
+# Sort (co-ordinate order) and merge XM BAMs
+
+# Index BAM
+
+# Remove chromosome-specific XM BAMs
