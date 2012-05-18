@@ -22,6 +22,7 @@ import argparse
 ############################################################################################################################################################################################
 # Convert the MethylC-Seq mapped reads files from the Lister et al. 2011 (Nature) paper (downloaded from http://neomorph.salk.edu/ips_methylomes/data.html on 08/05/2012-?) to BAM format.
 # SequenceA is always interpreted as read1, and sequenceB as read2, for paired-end data.
+# Chromosomes in reference genome must be named with the following convention: chr1, chr2, ..., chr22, chrX, chrY, chrM, chrL, where chrL is the genome of the lambda_phage DNA spike-in.
 ############################################################################################################################################################################################
 
 ### TODOs ###
@@ -177,7 +178,7 @@ def makeXG(sequenceB, strand):
         XGR = ('XG', XG)
         return XGL, XGR
     else:
-        return ('XG', XG)
+        return ('XG', XG), None
 
 def createHeader():
     FAIDX = open(args.ref_index, 'r')
@@ -206,7 +207,7 @@ BAM = pysam.Samfile(args.outfile, 'wb', header = header)
 ### The main loop ###
 ############################################################################################################################################################################################
 # Loop over methylC_seq_reads files file-by-file (i.e. chromosome-by-chromosome)
-print 'Input files is', args.infile
+print 'Input file is', args.infile
 linecounter = 1
 for line in INFILE: # Loop over the file line-by-line and convert to an AlignedRead instance
     if linecounter == 1: # Skip the header line
@@ -265,17 +266,17 @@ for line in INFILE: # Loop over the file line-by-line and convert to an AlignedR
         BAM.write(readR)
     elif sequenceB == '': # Single-end 
         read = pysam.AlignedRead()
-        read.rname = BAM.gettid(RNAME1)
-        read.qname = QNAME1
-        read.flag = FLAG1
-        read.pos = POS1
-        read.mapq = MAPQ1
-        read.cigar = CIGAR1
-        read.rnext = BAM.gettid(RNEXT1)
-        read.pnext = PNEXT1
-        read.tlen = TLEN1
-        read.seq = SEQ1
-        read.qual = QUAL1
+        read.rname = BAM.gettid(RNAMEL)
+        read.qname = QNAMEL
+        read.flag = FLAGL
+        read.pos = POSL
+        read.mapq = MAPQL
+        read.cigar = CIGARL
+        read.rnext = BAM.gettid(RNEXTL)
+        read.pnext = PNEXTL
+        read.tlen = TLENL
+        read.seq = SEQL
+        read.qual = QUALL
         read.tags = read.tags + [XGL]
         BAM.write(read)
     linecounter += 1
