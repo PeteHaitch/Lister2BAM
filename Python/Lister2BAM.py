@@ -187,7 +187,7 @@ def createHeader():
     sq = []
     for i in range(0, len(faidx)):
         line = faidx[i].rsplit('\t')
-        sq.append({'LN': int(line[1]), 'SN': line[0]}, 'AS': 'hg18+lambda_phage')
+        sq.append({'LN': int(line[1]), 'SN': line[0], 'AS': 'hg18+lambda_phage'})
     pgid = 'Lister2BAM.py'
     vn = '1.0'
     cl = ' '.join(['Lister2BAM.py', args.infile, args.outfile, args.ref_index])
