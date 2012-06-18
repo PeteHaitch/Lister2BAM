@@ -56,7 +56,9 @@ args = parser.parse_args()
 # All functions return a 2-tuple - the first element for readL (the leftmost read, regardless of strand) and the second element for readR (the rightmost read, regardless of strand)
 # If single-end data then only the first element should be used and the second element is set to None
 #############################################################################################################################################################################################
-def splitSequence(sequence):
+def splitSequence(sequence, strand):
+    if strand == '-':
+        sequence = sequence[::-1]
     n_blanks = sequence.count('.')
     if n_blanks > 0:
         sequenceA, sequenceB = filter(None, sequence.rsplit('.'))
@@ -126,8 +128,8 @@ def makeSEQ(sequenceA, sequenceB, strand):
         seqL = sequenceA
         seqR = sequenceB 
     elif strand == '-':
-        seqL = DNAComplement(sequenceA[::-1])
-        seqR = DNAComplement(sequenceB[::-1])
+        seqL = DNAComplement(sequenceA)
+        seqR = DNAComplement(sequenceB)
     return seqL, seqR
 
 def DNAComplement(strand):
@@ -189,7 +191,7 @@ for line in INFILE: # Loop over the file line-by-line and convert to an AlignedR
     copies = line[7]
     sequence = line[8]
     quality = line[9]
-    sequenceA, sequenceB, n_blanks = splitSequence(sequence)
+    sequenceA, sequenceB, n_blanks = splitSequence(sequence, strand)
     # Make the SAM/BAM fields
     RNAMEL, RNAMER = makeRNAME(assembly)
     QNAMEL, QNAMER = makeQNAME(name)
