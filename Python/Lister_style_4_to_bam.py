@@ -155,7 +155,7 @@ for line in INFILE: # Loop over the file line-by-line and convert to an AlignedR
     # Make the SAM/BAM fields
     RNAME = makeRNAME(assembly)
     QNAME = makeQNAME(name)
-    FLAG = makeFLAG(sequence)
+    FLAG = makeFLAG(strand)
     POS = makePOS(position)
     MAPQ = makeMAPQ()
     CIGAR = makeCIGAR(sequence)
