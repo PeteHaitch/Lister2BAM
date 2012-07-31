@@ -238,6 +238,34 @@ for line in INFILE: # Loop over the file line-by-line and convert to an AlignedR
     readR.qual = QUALR
     readL.tags = readL.tags + [XGL]
     readR.tags = readR.tags + [XGL]
+    if not readL.is_paired:
+        if readL.opt('XG') == 'CT':
+            readL.tags = readL.tags + [('XR', 'CT')]
+        elif readL.opt('XG') == 'GA':
+            readL.tags = readL.tags + [('XR', 'CT')]
+    elif readL.is_paired:
+        if readL.opt('XG') == 'CT' and readL.is_readL1:
+            readL.tags = readL.tags + [('XR', 'CT')]
+        elif readL.opt('XG') == 'CT' and readL.is_readL2:
+            readL.tags = readL.tags + [('XR', 'GA')]
+        elif readL.opt('XG') == 'GA' and readL.is_readL1:
+            readL.tags = readL.tags + [('XR', 'CT')]
+        elif readL.opt('XG') == 'GA' and readL.is_readL2:
+            readL.tags = readL.tags + [('XR', 'GA')]
+    if not readR.is_paired:
+        if readR.opt('XG') == 'CT':
+            readR.tags = readR.tags + [('XR', 'CT')]
+        elif readR.opt('XG') == 'GA':
+            readR.tags = readR.tags + [('XR', 'CT')]
+    elif readR.is_paired:
+        if readR.opt('XG') == 'CT' and readR.is_readR1:
+            readR.tags = readR.tags + [('XR', 'CT')]
+        elif readR.opt('XG') == 'CT' and readR.is_readR2:
+            readR.tags = readR.tags + [('XR', 'GA')]
+        elif readR.opt('XG') == 'GA' and readR.is_readR1:
+            readR.tags = readR.tags + [('XR', 'CT')]
+        elif readR.opt('XG') == 'GA' and readR.is_readR2:
+            readR.tags = readR.tags + [('XR', 'GA')]
     BAM.write(readL)
     BAM.write(readR)
     linecounter += 1

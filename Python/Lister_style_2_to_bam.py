@@ -184,6 +184,20 @@ for line in INFILE: # Loop over the file line-by-line and convert to an AlignedR
     read.seq = SEQ
     read.qual = QUAL
     read.tags = read.tags + [XG]
+    if not read.is_paired:
+        if read.opt('XG') == 'CT':
+            read.tags = read.tags + [('XR', 'CT')]
+        elif read.opt('XG') == 'GA':
+            read.tags = read.tags + [('XR', 'CT')]
+    elif read.is_paired:
+        if read.opt('XG') == 'CT' and read.is_read1:
+            read.tags = read.tags + [('XR', 'CT')]
+        elif read.opt('XG') == 'CT' and read.is_read2:
+            read.tags = read.tags + [('XR', 'GA')]
+        elif read.opt('XG') == 'GA' and read.is_read1:
+            read.tags = read.tags + [('XR', 'CT')]
+        elif read.opt('XG') == 'GA' and read.is_read2:
+            read.tags = read.tags + [('XR', 'GA')]
     BAM.write(read)
     linecounter += 1
 ############################################################################################################################################################################################
